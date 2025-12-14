@@ -1,0 +1,32 @@
+# LlamaIndex Integration Requirements
+# Install with: pip install -r requirements_llamaindex.txt
+
+# Core LlamaIndex
+llama-index==0.10.0
+llama-index-core==0.10.0
+
+# LLM Integrations
+llama-index-llms-openai==0.1.0
+llama-index-llms-anthropic==0.1.0
+
+# Embedding Models
+llama-index-embeddings-openai==0.1.0
+llama-index-embeddings-huggingface==0.1.0
+
+# Vector Stores
+llama-index-vector-stores-chroma==0.1.0
+llama-index-vector-stores-pinecone==0.1.0
+llama-index-vector-stores-qdrant==0.1.0
+
+# Graph Stores
+llama-index-graph-stores-neo4j==0.1.0
+
+# Readers
+llama-index-readers-file==0.1.0
+
+# Additional Dependencies
+openai>=1.0.0
+anthropic>=0.7.0
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+tiktoken>=0.5.0

@@ -1,0 +1,219 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with replication
+  postgres-primary:
+    image: postgres:15-alpine
+    container_name: gov_portal_db_primary
+    environment:
+      POSTGRES_DB: government_services
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
+      POSTGRES_REPLICATION_MODE: master
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-repl_password}
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - gov_portal_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Read Replica for scaling reads
+  postgres-replica:
+    image: postgres:15-alpine
+    container_name: gov_portal_db_replica
+    environment:
+      POSTGRES_REPLICATION_MODE: slave
+      POSTGRES_MASTER_SERVICE: postgres-primary
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-repl_password}
+    depends_on:
+      - postgres-primary
+    networks:
+      - gov_portal_network
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: gov_portal_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - gov_portal_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django Backend (scalable)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gov_portal_backend
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 120
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-secure_password}@postgres-primary:5432/government_services
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
+    volumes:
+      - ./backend:/app
+      - media_files:/app/media
+      - static_files:/app/static
+    depends_on:
+      - postgres-primary
+      - redis
+    networks:
+      - gov_portal_network
+    deploy:
+      replicas: 3  # Scale to 3 instances
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Celery Worker for async tasks (scalable)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-secure_password}@postgres-primary:5432/government_services
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+    volumes:
+      - ./backend:/app
+      - media_files:/app/media
+    depends_on:
+      - postgres-primary
+      - redis
+    networks:
+      - gov_portal_network
+    deploy:
+      replicas: 2  # Scale workers
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Celery Beat for scheduled tasks
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config beat -l info
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-secure_password}@postgres-primary:5432/government_services
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres-primary
+      - redis
+    networks:
+      - gov_portal_network
+
+  # Next.js Frontend (scalable)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gov_portal_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://nginx/api
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - gov_portal_network
+    deploy:
+      replicas: 2  # Scale frontend
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: gov_portal_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_files:/static:ro
+      - media_files:/media:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - gov_portal_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gov_portal_prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - gov_portal_network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gov_portal_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - gov_portal_network
+
+volumes:
+  postgres_primary_data:
+  redis_data:
+  media_files:
+  static_files:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  gov_portal_network:
+    driver: bridge

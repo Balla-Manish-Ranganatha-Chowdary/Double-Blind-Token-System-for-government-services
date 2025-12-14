@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gov-portal-config
+  namespace: gov-portal
+data:
+  DB_NAME: "government_services"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  ALLOWED_HOSTS: "*"
+  DEBUG: "False"

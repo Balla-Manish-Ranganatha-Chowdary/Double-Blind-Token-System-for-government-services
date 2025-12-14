@@ -1,0 +1,29 @@
+{
+  "name": "double-blind-token-system-for-government-services",
+  "version": "1.0.0",
+  "description": "A production-ready platform that eliminates corruption in government service delivery through double-blind token encryption, AI-powered automation, and anonymous application processing.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/Double-Blind-Token-System-for-Government-Services.git"
+  },
+  "keywords": [
+    "government",
+    "corruption",
+    "transparency",
+    "double-blind",
+    "encryption",
+    "ai",
+    "rag",
+    "langchain",
+    "django",
+    "nextjs",
+    "kubernetes",
+    "open-source"
+  ],
+  "author": "Open Source Community",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/Double-Blind-Token-System-for-Government-Services/issues"
+  },
+  "homepage": "https://github.com/yourusername/Double-Blind-Token-System-for-Government-Services#readme"
+}
