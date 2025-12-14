@@ -861,7 +861,7 @@ A: No! The system uses rule-based agents. Optional LLM integration available.
 
 ## ⭐ Star this repository if you find it useful!
 
-**Built with ❤️ to eliminate corruption through technology and transparency**
+**Built to eliminate corruption through technology and transparency**
 
 [Report Bug](https://github.com/Balla-Manish-Ranganatha-Chowdary/Double-Blind-Token-System-for-Government-Services/issues) · 
 [Request Feature](https://github.com/Balla-Manish-Ranganatha-Chowdary/Double-Blind-Token-System-for-Government-Services/issues) · 
